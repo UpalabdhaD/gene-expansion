@@ -1,0 +1,204 @@
+#Install Maker2
+#Register and download Maker2 from https://www.yandell-lab.org/software/maker.html. 
+# Go to directory “maker/src” of downloaded package
+# Run the command below to configure
+$ perl Build.PL
+# Install maker2 with the following command
+$ ./Build install
+
+
+#Install BUSCO
+# Download the package
+$ git clone https://gitlab.com/ezlab/busco.git
+# Install 
+$ cd busco/
+$ sudo python3 setup.py
+# Check installation 
+$ busco -h
+
+
+#Install RepeatMasker
+# download repeatMasker from http://www.repeatmasker.org 
+# download RepBase repeat libraries from https://www.girinst.org/
+# Unpack the package of RepeatMasker
+$ cp < RepeatMasker.tar.gz> <path_to_install_RepeatMasker>
+$ cd <path_to_install_RepeatMasker>
+$ gunzip <RepeatMasker.tar.gz>
+$ tar xvf <RepeatMasker.tar>
+# Unpack RepBase library
+$ cp <RepBaseRepeat.tar.gz> <path_to_install_RepeatMasker>/RepeatMasker
+$ cd <path_to_install_RepeatMasker>/RepeatMasker
+$ gunzip <RepBaseRepeat.tar.gz>
+$ tar xvf <RepBaseRepeat.tar.gz>
+# Set up by run following command
+$ perl ./configure
+
+
+#Install RepeatModeler
+# download the package from http://www.repeatmasker.org/RepeatModeler/
+# unpack the package of RepeatModeler
+$ tar -zxvf <RepeatModeler-open-#.#.#.tar.gz>
+# go into the folder and configure it
+$ perl ./configure
+
+
+#Install CAFE5
+# Download the package from https://github.com/hahnlab/CAFE5
+# Go into the folder and run following commands to install
+$ ./configure
+$ ./make
+
+
+# Install GeneWise
+# Download the package from ftp://ftp.ebi.ac.uk/pub/software/unix/wise2/
+# Binaries are in src/bin after make
+$ cd <path_wise2>/src
+$ make all
+
+
+#Install Apollo
+# run the command below to install
+$ git clone https://github.com/GMOD/Apollo.git Apollo
+# See https://genomearchitect.readthedocs.io/en/latest/Apollo2Build.html for details 
+
+
+#Install STAR
+# Download STAR from https://github.com/alexdobin/STAR 
+$ cd <path_STAR>
+$ make STAR
+
+
+# RepeatModeler: Construct species-specific repetitive elements
+# Input: genomic sequences 
+# Output: file “consensi.fa.classified”, containing the receptive sequences
+# path_RM: path of RepeatModeler
+# -pa N: how many cores to run
+# -engine ncbi: refers to blast program for alignment
+$ <path_RM>/BuildDatabase -name seqfiledb -engine ncbi <genome.fa>
+$ <path_RM>/RepeatModeler -database seqfiledb -pa N > seqfile.out
+
+
+#Augustus training
+# Input: genome assembly
+# Output: trained model
+# --long: performs full optimization for Augustus training
+$ python <directory_of_BUSCO>/BUSCO.py --cup <number_thread> --in <genome_assembly>.fa --out <output_name> --lineage <directory_BUSCO_lineage_data> --mode genome --long
+
+
+#SNAP training
+# (a) Generate MAKER control files
+# Generate three files with suffix “.ctl”, through which to provide user input 
+$ maker -CTL
+
+# (b) Edit maker_opts.ctl file to provide input parameters 
+genome=<genome_assembly.fa>
+organism_type=<eukaryotic|prokaryotic>
+# Expressed sequence tags (ESTs) or assembled mRNA
+est=<transcript_evidence.fa> 
+# Protein sequences from other organisms (e.g., UniProt) 
+protein=<protein.fa>
+# Gene prediction method 
+# (1st round training derive gene mode from EST or protein evidence)
+est2genome=1 | protein2genome=1
+
+# (c) Run MAKER
+# Run on a single processor by “maker” or on “N” processors by “mpirun -n”
+$ maker | mpirun -n N maker 
+
+# (d) Collect annotation result and merge into a single file
+$ cd <maker.ouput>
+$ gff3_merge -d <genome_datastore_index.log> -g 
+
+# (e) Make a directory for the training
+$ mkdir <snapTrain1>
+$ cd <snapTrain1> 
+
+# (f) Generate files required for training
+# Generate <genome.ann>, <genome.dna> required to train SNAP
+$ maker2zff <../all.gff>
+# “fathom” separates annotation into categories
+# uni: single gene per sequence
+# alt: genes with alternative splicing
+# olp: genes overlap others 
+# err: genes with errors
+# wrn: genes with warnings
+$ fathom -categorize 1000 <genome.ann> <genome.dna>
+# “fathom” exports the genes
+# Generate export.aa, export.ann, export.dna, export.txt
+$ fathom export 1000 uni.ann uni.dna
+
+# (g) Generate new parameters
+$ mkdir params
+$ cd params
+$ forge ../export.ann ../export.dna
+$ cd ..
+
+# (h) Generate new HMM
+$ hmm-assembler.pl <genome> params  >   <genome.hmm>
+$ cd ..
+
+# (i) Update maker_opts.ctl & retrain the model from step (c) to (h) 
+snaphmm=<genome.hmm>
+est2genome=0
+protein2genome=0
+
+
+#Maker2: gene structure annotation
+# (a) Generate MAKER control files
+# Generate three files with suffix “.ctl”, through which to provide user input 
+$ maker -CTL
+
+# (b) Edit maker_opts.ctl file to provide input parameters 
+genome=<genome_assembly.fa>
+organism_type=<eukaryotic|prokaryotic>
+# Expressed sequence tags (ESTs) or assembled mRNA
+est=<transcript_evidence.fa> 
+# Protein sequences from other organisms (e.g., UniProt) 
+protein=<protein.fa>
+# Gene prediction models
+snaphmm=<SNAP_trained_model>
+augustus_species=<augustus_trained_model> 
+
+# (c) Run MAKER
+# Run on a single processor by “maker” or on “N” processors by ‘”mpirun -n”
+$ maker | mpirun -n N maker 
+
+# (d) Collect annotation result and merge into a single file
+$ cd <maker.ouput>
+$ gff3_merge -d <genome_datastore_index.log> -g
+
+
+#BUSCO: measure completeness of genome assembly or annotated transcripts/proteins
+# Input: genome sequence or protein sequence to be measured
+# Output: completeness of input regarding to near-universal single-copy orthologs 
+# -i: input file, either a nucleotide fasta file or a protein fasta file
+# -l: lineage dataset
+# -o: folder to save results
+# -m: assessment mode (i.e., genome, protein, transcriptome) 
+$ busco -i <DNA.fa|protein.fa> -l <lineage> -o <output> -m <mode>  
+
+
+#bedtools: get genomic sequence around a predicted gene (used for GeneWise)
+# Input: genome sequence, gene coordinate(±5kb) in bed format
+# Output: genome sequence in gene coordinate(±5kb) 
+# fi: the genomic sequence
+# -bed: gene coordinate in bed format (extend to upstream/downstream 5kb) 
+# -s: force strandedness. Return reverse complement if the gene is on the antisense strand.
+# -name: use “name” column in bed file as fasta headers of output 
+$ bedtools getfasta -fi <genomic.fa> -bed <geneCoordinate.bed> -s -name > genomic-region.fa
+
+
+#GeneWise: identify pseudogenes
+# Input: protein sequence of homolog, DNA sequence of genomic region of a predicted gene copy
+# Output: report mutations that pseudogenized the gene copy
+# -sum: show summary output
+# -pretty: show pretty ascii output
+# -pseudo: mark genes with frameshifts as pseudo genes
+# -genes: show gene structure
+# -cdna: show predicted cDNA sequence
+# -trans: show protein translation
+# -pep: show predicted peptide
+# -para: show parameters
+# -both: check both strand
+# -quiet: no report on stderr   
+$ genewise <protein.fa> <genomic-region.fa> -sum -pretty -pseudo -genes -cdna -trans -pep -para -both -quiet > out.gw
