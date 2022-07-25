@@ -103,39 +103,39 @@ est2genome=1 | protein2genome=1
 
 # (c) Run MAKER
 # Run on a single processor by “maker” or on “N” processors by “mpirun -n”
-$ maker | mpirun -n N maker 
+maker | mpirun -n N maker 
 
 # (d) Collect annotation result and merge into a single file
-$ cd <maker.ouput>
-$ gff3_merge -d <genome_datastore_index.log> -g 
+cd <maker.ouput>
+gff3_merge -d <genome_datastore_index.log> -g 
 
 # (e) Make a directory for the training
-$ mkdir <snapTrain1>
-$ cd <snapTrain1> 
+mkdir <snapTrain1>
+cd <snapTrain1> 
 
 # (f) Generate files required for training
 # Generate <genome.ann>, <genome.dna> required to train SNAP
-$ maker2zff <../all.gff>
+maker2zff <../all.gff>
 # “fathom” separates annotation into categories
 # uni: single gene per sequence
 # alt: genes with alternative splicing
 # olp: genes overlap others 
 # err: genes with errors
 # wrn: genes with warnings
-$ fathom -categorize 1000 <genome.ann> <genome.dna>
+fathom -categorize 1000 <genome.ann> <genome.dna>
 # “fathom” exports the genes
 # Generate export.aa, export.ann, export.dna, export.txt
-$ fathom export 1000 uni.ann uni.dna
+fathom export 1000 uni.ann uni.dna
 
 # (g) Generate new parameters
-$ mkdir params
-$ cd params
-$ forge ../export.ann ../export.dna
-$ cd ..
+mkdir params
+cd params
+forge ../export.ann ../export.dna
+cd ..
 
 # (h) Generate new HMM
-$ hmm-assembler.pl <genome> params  >   <genome.hmm>
-$ cd ..
+hmm-assembler.pl <genome> params  >   <genome.hmm>
+cd ..
 
 # (i) Update maker_opts.ctl & retrain the model from step (c) to (h) 
 snaphmm=<genome.hmm>
